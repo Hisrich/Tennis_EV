@@ -18,7 +18,6 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import log_loss, brier_score_loss, roc_auc_score
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
-from lightgbm import LGBMClassifier
 from sqlalchemy.orm import Session
 from loguru import logger
 
@@ -255,19 +254,6 @@ class MLEngine:
                 eval_metric="logloss",
                 random_state=42,
                 n_jobs=-1,
-            )
-        elif algorithm == "lightgbm":
-            return LGBMClassifier(
-                n_estimators=300,
-                max_depth=4,
-                learning_rate=0.05,
-                subsample=0.8,
-                colsample_bytree=0.8,
-                reg_alpha=0.1,
-                reg_lambda=1.0,
-                random_state=42,
-                n_jobs=-1,
-                verbose=-1,
             )
         elif algorithm == "logistic":
             return LogisticRegression(C=1.0, max_iter=1000, random_state=42)
