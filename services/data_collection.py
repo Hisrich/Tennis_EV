@@ -122,12 +122,12 @@ class DataIngestionService:
     def ingest_odds(self) -> int:
     # Dynamically fetch all active tennis markets
         try:
-            response = self.client.get(
-                f"{self.base_url}/sports",
-                params={"apiKey": self.api_key}
-            )
-            response.raise_for_status()
-            all_sports = response.json()
+            import httpx
+            url = f"{self.odds_client.base_url}/sports"
+            with httpx.Client(timeout=15) as client:
+                response = client.get(url, params={"apiKey": self.odds_client.api_key})
+                response.raise_for_status()
+                all_sports = response.json()
             sports = [s["key"] for s in all_sports if s.get("group") == "Tennis" and not s.get("has_outrights")]
             logger.info(f"Found {len(sports)} active tennis markets: {sports}")
         except Exception as e:
@@ -137,11 +137,17 @@ class DataIngestionService:
         total = 0
         for sport in sports:
             try:
-                records = self._fetch_and_store_odds(sport)
-                total += records
+                raw = self.odds_client.get_odds(sport)
+                for event in raw:
+                    try:
+                        saved = self._process_event(event)
+                        total += saved
+                    except Exception as e:
+                        logger.debug(f"Skip event: {e}")
             except Exception as e:
                 logger.error(f"Error fetching odds for {sport}: {e!r}")
 
+        self.db.commit()
         logger.info(f"Ingested {total} new odds records")
         return total
 

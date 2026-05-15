@@ -16,3 +16,4 @@ loguru
 python-dateutil
 psycopg2-binary
 tenacity
+httpx
