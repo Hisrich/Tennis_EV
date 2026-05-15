@@ -129,7 +129,7 @@ class DataIngestionService:
                     saved = self._process_event(event)
                     count += saved
             except Exception as e:
-                logger.error(f"Error fetching odds for {sport}: {e}")
+                logger.error(f"Error fetching odds for {sport}: {e!r}")
 
         logger.info(f"Ingested {count} new odds records")
         return count
