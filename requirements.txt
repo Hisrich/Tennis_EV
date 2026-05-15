@@ -1,0 +1,17 @@
+flask
+flask-cors
+sqlalchemy
+apscheduler
+python-dotenv
+scikit-learn
+xgboost
+lightgbm
+pandas
+numpy
+joblib
+httpx
+requests
+python-telegram-bot
+loguru
+python-dateutil
+psycopg2-binary

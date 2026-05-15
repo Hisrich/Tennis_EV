@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Bets — Tennis EV</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="brand"><span class="icon">⚡</span> Tennis EV</div>
+      <div class="sub">Value Betting Platform</div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html"        class="nav-item"><span class="icon">📊</span> Dashboard</a>
+      <a href="opportunities.html"class="nav-item"><span class="icon">🎯</span> Value Bets</a>
+      <a href="bets.html"         class="nav-item"><span class="icon">📋</span> My Bets</a>
+      <a href="performance.html"  class="nav-item"><span class="icon">📈</span> Performance</a>
+      <a href="backtest.html"     class="nav-item"><span class="icon">🔁</span> Backtester</a>
+      <a href="model.html"        class="nav-item"><span class="icon">🧠</span> Model Analytics</a>
+      <a href="players.html"      class="nav-item"><span class="icon">👤</span> Players</a>
+      <a href="admin.html"        class="nav-item"><span class="icon">⚙️</span> System</a>
+    </nav>
+    <div class="sidebar-footer">Tennis EV Platform v1.0</div>
+  </aside>
+
+  <main class="main">
+    <div class="page">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <div class="page-title">My Bets</div>
+          <div class="page-sub">Track and settle your placed bets</div>
+        </div>
+        <div class="flex gap-2">
+          <div class="tabs">
+            <button class="tab active" data-status="">All</button>
+            <button class="tab" data-status="pending">Pending</button>
+            <button class="tab" data-status="won">Won</button>
+            <button class="tab" data-status="lost">Lost</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Summary row -->
+      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px" id="bets-summary">
+        <div class="stat-card"><div class="stat-label">Total Bets</div><div class="stat-value" id="s-total">—</div></div>
+        <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value" id="s-wr">—</div></div>
+        <div class="stat-card"><div class="stat-label">Total Staked</div><div class="stat-value" id="s-staked">—</div></div>
+        <div class="stat-card"><div class="stat-label">Profit / Loss</div><div class="stat-value" id="s-pl">—</div></div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>#</th><th>Bookmaker</th><th>Odds</th><th>Stake</th>
+              <th>Placed</th><th>Status</th><th>P&amp;L</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="bets-tbody"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+let allBets = [];
+let activeStatus = "";
+
+function computeSummary(bets) {
+  const won  = bets.filter(b => b.status === "won");
+  const lost = bets.filter(b => b.status === "lost");
+  const pl   = bets.reduce((s, b) => s + (b.profit_loss || 0), 0);
+  const staked = bets.reduce((s, b) => s + b.stake_amount, 0);
+  const wr = (won.length + lost.length) > 0 ? won.length / (won.length + lost.length) * 100 : 0;
+
+  document.getElementById("s-total").textContent  = bets.length;
+  document.getElementById("s-wr").textContent     = wr.toFixed(1) + "%";
+  document.getElementById("s-staked").textContent = staked.toFixed(2);
+  const plEl = document.getElementById("s-pl");
+  plEl.textContent = (pl >= 0 ? "+" : "") + pl.toFixed(2);
+  plEl.className   = "stat-value " + (pl > 0 ? "green" : pl < 0 ? "red" : "");
+}
+
+function renderBets(bets) {
+  const tbody = document.getElementById("bets-tbody");
+  if (!bets.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">No bets found</td></tr>';
+    return;
+  }
+  tbody.innerHTML = bets.map(b => {
+    const statusClass = b.status === "won" ? "badge-green" : b.status === "lost" ? "badge-red" : "badge-gray";
+    const pl = b.profit_loss;
+    const plStr = pl != null ? (pl >= 0 ? "+" : "") + pl.toFixed(2) : "—";
+    const plClass = pl > 0 ? "text-green" : pl < 0 ? "text-red" : "";
+    const placed = b.placed_at ? new Date(b.placed_at).toLocaleDateString() : "—";
+    const pending = !b.status || b.status === "pending";
+    const actions = pending
+      ? `<button class="btn btn-sm badge-green" onclick="settle(${b.id},'WON')" style="background:var(--green-dim);color:var(--green);border:1px solid rgba(34,197,94,.3)">Won</button>
+         <button class="btn btn-sm badge-red" onclick="settle(${b.id},'LOST')" style="background:var(--red-dim);color:var(--red);border:1px solid rgba(239,68,68,.3)">Lost</button>`
+      : `<span class="text-muted">Settled</span>`;
+
+    return `<tr>
+      <td class="text-muted">#${b.id}</td>
+      <td>${b.bookmaker}</td>
+      <td class="fw-bold">${b.odds_taken.toFixed(2)}</td>
+      <td>${b.stake_amount.toFixed(2)}</td>
+      <td class="text-muted">${placed}</td>
+      <td><span class="badge ${statusClass}">${b.status || "pending"}</span></td>
+      <td class="${plClass} fw-bold">${plStr}</td>
+      <td><div class="flex gap-2">${actions}</div></td>
+    </tr>`;
+  }).join("");
+}
+
+async function settle(id, status) {
+  try {
+    await API.settleBet(id, status);
+    Toast.success(`Bet #${id} settled as ${status}`);
+    loadBets();
+  } catch(e) { Toast.error(e.message); }
+}
+
+async function loadBets() {
+  try {
+    allBets = await API.getBets(activeStatus || undefined);
+    computeSummary(allBets);
+    renderBets(allBets);
+  } catch(e) {
+    document.getElementById("bets-tbody").innerHTML = `<tr><td colspan="8" class="empty">Error: ${e.message}</td></tr>`;
+  }
+}
+
+// Tab switching
+document.querySelectorAll(".tab").forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+    t.classList.add("active");
+    activeStatus = t.dataset.status;
+    loadBets();
+  };
+});
+
+loadBets();
+</script>
+</body>
+</html>

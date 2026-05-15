@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Backtester — Tennis EV</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="brand"><span class="icon">⚡</span> Tennis EV</div>
+      <div class="sub">Value Betting Platform</div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html"        class="nav-item"><span class="icon">📊</span> Dashboard</a>
+      <a href="opportunities.html"class="nav-item"><span class="icon">🎯</span> Value Bets</a>
+      <a href="bets.html"         class="nav-item"><span class="icon">📋</span> My Bets</a>
+      <a href="performance.html"  class="nav-item"><span class="icon">📈</span> Performance</a>
+      <a href="backtest.html"     class="nav-item"><span class="icon">🔁</span> Backtester</a>
+      <a href="model.html"        class="nav-item"><span class="icon">🧠</span> Model Analytics</a>
+      <a href="players.html"      class="nav-item"><span class="icon">👤</span> Players</a>
+      <a href="admin.html"        class="nav-item"><span class="icon">⚙️</span> System</a>
+    </nav>
+    <div class="sidebar-footer">Tennis EV Platform v1.0</div>
+  </aside>
+
+  <main class="main">
+    <div class="page">
+      <div class="page-title">Backtester</div>
+      <div class="page-sub">Simulate strategy performance on historical data</div>
+
+      <!-- Config card -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-title">Configuration</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Start Date</label>
+            <input type="date" id="bt-start" class="form-control" value="2024-01-01" />
+          </div>
+          <div class="form-group">
+            <label>End Date</label>
+            <input type="date" id="bt-end" class="form-control" />
+          </div>
+          <div class="form-group">
+            <label>Min Edge %</label>
+            <input type="number" id="bt-edge" class="form-control" value="5" step="0.5" min="1" />
+          </div>
+          <div class="form-group">
+            <label>Kelly Fraction</label>
+            <input type="number" id="bt-kelly" class="form-control" value="0.25" step="0.05" min="0.05" max="1" />
+          </div>
+          <div class="form-group">
+            <label>Starting Bankroll</label>
+            <input type="number" id="bt-bankroll" class="form-control" value="1000" />
+          </div>
+          <div class="form-group">
+            <label>Min Confidence</label>
+            <input type="number" id="bt-conf" class="form-control" value="0.55" step="0.01" min="0.5" max="1" />
+          </div>
+        </div>
+        <button class="btn btn-primary" id="btn-run-bt">▶ Run Backtest</button>
+      </div>
+
+      <!-- Results -->
+      <div id="bt-results" class="hidden">
+        <div class="stats-grid" style="margin-bottom:20px">
+          <div class="stat-card"><div class="stat-label">Final Bankroll</div><div class="stat-value green" id="bt-final">—</div></div>
+          <div class="stat-card"><div class="stat-label">ROI</div><div class="stat-value" id="bt-roi">—</div></div>
+          <div class="stat-card"><div class="stat-label">Total Bets</div><div class="stat-value" id="bt-total">—</div></div>
+          <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value" id="bt-wr">—</div></div>
+          <div class="stat-card"><div class="stat-label">Max Drawdown</div><div class="stat-value red" id="bt-dd">—</div></div>
+          <div class="stat-card"><div class="stat-label">Avg Edge</div><div class="stat-value yellow" id="bt-avgedge">—</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Backtest Bankroll Curve</div>
+          <div class="chart-wrap" style="height:260px"><canvas id="bt-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+// Default end date = today
+document.getElementById("bt-end").value = new Date().toISOString().split("T")[0];
+
+document.getElementById("btn-run-bt").onclick = async () => {
+  const btn = document.getElementById("btn-run-bt");
+  btn.disabled = true; btn.textContent = "Running…";
+
+  const payload = {
+    start_date:     document.getElementById("bt-start").value,
+    end_date:       document.getElementById("bt-end").value,
+    min_edge_pct:   parseFloat(document.getElementById("bt-edge").value),
+    kelly_fraction: parseFloat(document.getElementById("bt-kelly").value),
+    bankroll:       parseFloat(document.getElementById("bt-bankroll").value),
+    min_confidence: parseFloat(document.getElementById("bt-conf").value),
+  };
+
+  try {
+    const res = await API.runBacktest(payload);
+
+    document.getElementById("bt-results").classList.remove("hidden");
+    document.getElementById("bt-final").textContent   = res.final_bankroll?.toFixed(2) ?? "—";
+    const roi = res.roi_percent;
+    const roiEl = document.getElementById("bt-roi");
+    roiEl.textContent = (roi >= 0 ? "+" : "") + roi?.toFixed(1) + "%";
+    roiEl.className = "stat-value " + (roi >= 0 ? "green" : "red");
+    document.getElementById("bt-total").textContent   = res.total_bets ?? "—";
+    document.getElementById("bt-wr").textContent      = res.win_rate != null ? (res.win_rate * 100).toFixed(1) + "%" : "—";
+    document.getElementById("bt-dd").textContent      = res.max_drawdown != null ? "-" + (res.max_drawdown * 100).toFixed(1) + "%" : "—";
+    document.getElementById("bt-avgedge").textContent = res.avg_edge != null ? "+" + res.avg_edge.toFixed(1) + "%" : "—";
+
+    if (res.bankroll_history && res.bankroll_history.length > 1) {
+      const canvas = document.getElementById("bt-chart");
+      canvas.style.width = "100%"; canvas.style.height = "260px";
+      setTimeout(() => drawLineChart(canvas, res.bankroll_history, { xKey: "date", yKey: "bankroll" }), 50);
+    }
+
+    Toast.success("Backtest complete");
+  } catch(e) {
+    Toast.error(e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "▶ Run Backtest";
+  }
+};
+</script>
+</body>
+</html>

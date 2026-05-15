@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Performance — Tennis EV</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="brand"><span class="icon">⚡</span> Tennis EV</div>
+      <div class="sub">Value Betting Platform</div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html"        class="nav-item"><span class="icon">📊</span> Dashboard</a>
+      <a href="opportunities.html"class="nav-item"><span class="icon">🎯</span> Value Bets</a>
+      <a href="bets.html"         class="nav-item"><span class="icon">📋</span> My Bets</a>
+      <a href="performance.html"  class="nav-item"><span class="icon">📈</span> Performance</a>
+      <a href="backtest.html"     class="nav-item"><span class="icon">🔁</span> Backtester</a>
+      <a href="model.html"        class="nav-item"><span class="icon">🧠</span> Model Analytics</a>
+      <a href="players.html"      class="nav-item"><span class="icon">👤</span> Players</a>
+      <a href="admin.html"        class="nav-item"><span class="icon">⚙️</span> System</a>
+    </nav>
+    <div class="sidebar-footer">Tennis EV Platform v1.0</div>
+  </aside>
+
+  <main class="main">
+    <div class="page">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <div class="page-title">Performance</div>
+          <div class="page-sub">Bankroll growth, ROI, and betting statistics</div>
+        </div>
+        <div class="tabs" id="period-tabs">
+          <button class="tab" data-days="7">7d</button>
+          <button class="tab active" data-days="30">30d</button>
+          <button class="tab" data-days="90">90d</button>
+          <button class="tab" data-days="365">1y</button>
+        </div>
+      </div>
+
+      <!-- KPI row -->
+      <div class="stats-grid" style="grid-template-columns:repeat(6,1fr)">
+        <div class="stat-card"><div class="stat-label">ROI</div><div class="stat-value" id="p-roi">—</div></div>
+        <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value" id="p-wr">—</div></div>
+        <div class="stat-card"><div class="stat-label">Total Bets</div><div class="stat-value" id="p-total">—</div></div>
+        <div class="stat-card"><div class="stat-label">Wins</div><div class="stat-value green" id="p-wins">—</div></div>
+        <div class="stat-card"><div class="stat-label">Losses</div><div class="stat-value red" id="p-losses">—</div></div>
+        <div class="stat-card"><div class="stat-label">Net P&amp;L</div><div class="stat-value" id="p-pl">—</div></div>
+      </div>
+
+      <hr class="divider" />
+
+      <!-- Bankroll chart -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-title">Bankroll Curve</div>
+        <div class="chart-wrap" style="height:260px"><canvas id="br-chart"></canvas></div>
+      </div>
+
+      <!-- Bets by month bar chart (canvas) -->
+      <div class="card">
+        <div class="card-title">Bet History</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Bookmaker</th><th>Odds</th><th>Stake</th><th>Placed</th>
+              <th>Settled</th><th>Status</th><th>P&amp;L</th>
+            </tr></thead>
+            <tbody id="perf-tbody"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+let activeDays = 30;
+
+async function loadPerformance() {
+  try {
+    const perf = await API.getPerformanceSummary(activeDays);
+    const roi = perf.roi_percent;
+    const roiEl = document.getElementById("p-roi");
+    roiEl.textContent = (roi >= 0 ? "+" : "") + roi.toFixed(1) + "%";
+    roiEl.className = "stat-value " + (roi >= 0 ? "green" : "red");
+
+    document.getElementById("p-wr").textContent     = (perf.win_rate * 100).toFixed(1) + "%";
+    document.getElementById("p-total").textContent  = perf.total_bets;
+    document.getElementById("p-wins").textContent   = perf.wins;
+    document.getElementById("p-losses").textContent = perf.losses;
+    const pl = perf.total_profit;
+    const plEl = document.getElementById("p-pl");
+    plEl.textContent = (pl >= 0 ? "+" : "") + pl.toFixed(2);
+    plEl.className = "stat-value " + (pl >= 0 ? "green" : "red");
+  } catch(e) { console.error(e); }
+
+  try {
+    const history = await API.getBankrollHistory(activeDays);
+    const canvas = document.getElementById("br-chart");
+    canvas.style.width = "100%"; canvas.style.height = "260px";
+    setTimeout(() => drawLineChart(canvas, history, { xKey: "date", yKey: "bankroll" }), 50);
+  } catch(e) { console.error(e); }
+
+  try {
+    const bets = await API.getBets();
+    const cutoff = new Date(Date.now() - activeDays * 86400000);
+    const filtered = bets.filter(b => b.placed_at && new Date(b.placed_at) >= cutoff);
+    const tbody = document.getElementById("perf-tbody");
+    if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty">No bets in this period</td></tr>'; return; }
+    tbody.innerHTML = filtered.map(b => {
+      const sClass = b.status === "won" ? "badge-green" : b.status === "lost" ? "badge-red" : "badge-gray";
+      const pl = b.profit_loss;
+      const plStr = pl != null ? (pl >= 0 ? "+" : "") + pl.toFixed(2) : "—";
+      const plClass = pl > 0 ? "text-green" : pl < 0 ? "text-red" : "";
+      const placed  = b.placed_at  ? new Date(b.placed_at).toLocaleDateString()  : "—";
+      const settled = b.settled_at ? new Date(b.settled_at).toLocaleDateString() : "—";
+      return `<tr>
+        <td>${b.bookmaker}</td>
+        <td>${b.odds_taken.toFixed(2)}</td>
+        <td>${b.stake_amount.toFixed(2)}</td>
+        <td class="text-muted">${placed}</td>
+        <td class="text-muted">${settled}</td>
+        <td><span class="badge ${sClass}">${b.status || "pending"}</span></td>
+        <td class="${plClass} fw-bold">${plStr}</td>
+      </tr>`;
+    }).join("");
+  } catch(e) { console.error(e); }
+}
+
+document.querySelectorAll("#period-tabs .tab").forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll("#period-tabs .tab").forEach(x => x.classList.remove("active"));
+    t.classList.add("active");
+    activeDays = parseInt(t.dataset.days);
+    loadPerformance();
+  };
+});
+
+loadPerformance();
+</script>
+</body>
+</html>

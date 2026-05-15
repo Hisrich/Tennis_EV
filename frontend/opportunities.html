@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Value Bets — Tennis EV</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="brand"><span class="icon">⚡</span> Tennis EV</div>
+      <div class="sub">Value Betting Platform</div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html"        class="nav-item"><span class="icon">📊</span> Dashboard</a>
+      <a href="opportunities.html"class="nav-item"><span class="icon">🎯</span> Value Bets</a>
+      <a href="bets.html"         class="nav-item"><span class="icon">📋</span> My Bets</a>
+      <a href="performance.html"  class="nav-item"><span class="icon">📈</span> Performance</a>
+      <a href="backtest.html"     class="nav-item"><span class="icon">🔁</span> Backtester</a>
+      <a href="model.html"        class="nav-item"><span class="icon">🧠</span> Model Analytics</a>
+      <a href="players.html"      class="nav-item"><span class="icon">👤</span> Players</a>
+      <a href="admin.html"        class="nav-item"><span class="icon">⚙️</span> System</a>
+    </nav>
+    <div class="sidebar-footer">Tennis EV Platform v1.0</div>
+  </aside>
+
+  <main class="main">
+    <div class="page">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <div class="page-title">Value Bets</div>
+          <div class="page-sub">Current positive EV opportunities across bookmakers</div>
+        </div>
+        <div class="flex gap-2 items-center">
+          <label style="font-size:12px;color:var(--muted)">Min Edge:</label>
+          <select id="min-edge" class="form-control" style="width:90px">
+            <option value="3">3%</option>
+            <option value="5" selected>5%</option>
+            <option value="7">7%</option>
+            <option value="10">10%</option>
+          </select>
+          <button class="btn btn-primary" id="btn-refresh">↻ Refresh</button>
+        </div>
+      </div>
+
+      <div id="opps-container">
+        <div class="empty"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Record Bet Modal -->
+<div class="modal-overlay hidden" id="bet-modal">
+  <div class="modal">
+    <div class="modal-title">Record Bet</div>
+    <input type="hidden" id="modal-opp-id" />
+    <div class="form-row">
+      <div class="form-group">
+        <label>Odds Taken</label>
+        <input type="number" step="0.01" id="modal-odds" class="form-control" />
+      </div>
+      <div class="form-group">
+        <label>Stake Amount</label>
+        <input type="number" step="0.01" id="modal-stake" class="form-control" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Bookmaker</label>
+        <input type="text" id="modal-bookie" class="form-control" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Notes (optional)</label>
+      <input type="text" id="modal-notes" class="form-control" placeholder="Any notes…" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" id="modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="modal-submit">Record Bet</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+let currentOpps = [];
+
+function edgeBadgeClass(e) {
+  return e >= 10 ? "badge-green" : e >= 7 ? "badge-yellow" : "badge-blue";
+}
+
+function renderOpps(opps) {
+  const el = document.getElementById("opps-container");
+  if (!opps.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">🎯</div>No value bets at this threshold</div>';
+    return;
+  }
+  el.innerHTML = `<div class="opp-grid">${opps.map((o, idx) => {
+    const p1 = o.match?.player1?.name || "P1";
+    const p2 = o.match?.player2?.name || "P2";
+    const betOn = o.bet_on_player === 1 ? p1 : p2;
+    const vs    = o.bet_on_player === 1 ? p2 : p1;
+    const tour  = o.match?.tournament?.name || "";
+    const surf  = o.match?.surface || "";
+    const sched = o.match?.scheduled_at ? new Date(o.match.scheduled_at).toLocaleString() : "TBD";
+    const modelPct  = (o.model_probability * 100).toFixed(1);
+    const impliedPct= (o.implied_probability * 100).toFixed(1);
+    const ev        = (o.expected_value * 100).toFixed(2);
+    const kelly     = o.kelly_stake_pct ? (o.kelly_stake_pct * 100).toFixed(1) : "—";
+
+    return `
+    <div class="opp-card">
+      <div class="opp-header">
+        <div>
+          <div class="opp-player">BET: ${betOn} <span class="badge ${edgeBadgeClass(o.edge_percent)}">+${o.edge_percent.toFixed(1)}%</span></div>
+          <div class="opp-vs">vs ${vs}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="opp-odds">${o.decimal_odds.toFixed(2)}</div>
+          <div class="opp-bookie">${o.bookmaker}</div>
+        </div>
+      </div>
+
+      <div class="prob-bar">
+        <div class="prob-row">
+          <span class="prob-label">Market Prob</span><span class="prob-val market">${impliedPct}%</span>
+        </div>
+        <div class="prob-row">
+          <span class="prob-label">Model Prob</span><span class="prob-val model">${modelPct}%</span>
+        </div>
+        <div class="prob-row" style="margin-bottom:0">
+          <span class="prob-label">Expected Value</span><span class="prob-val ev">+${ev}%</span>
+        </div>
+      </div>
+
+      <div class="opp-meta">
+        ${tour ? `<span>🏆 ${tour}</span>` : ""}
+        ${surf ? `<span>🎾 ${surf}</span>` : ""}
+        <span>🕐 ${sched}</span>
+        <span>Kelly: ${kelly}%</span>
+      </div>
+
+      <div class="opp-actions">
+        <button class="btn btn-primary btn-sm" onclick="openBetModal(${idx})">+ Record Bet</button>
+      </div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+async function loadOpps() {
+  const minEdge = document.getElementById("min-edge").value;
+  document.getElementById("opps-container").innerHTML = '<div class="empty"><div class="spinner"></div></div>';
+  try {
+    currentOpps = await API.getOpportunities(minEdge);
+    renderOpps(currentOpps);
+  } catch(e) {
+    document.getElementById("opps-container").innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+  }
+}
+
+function openBetModal(idx) {
+  const o = currentOpps[idx];
+  document.getElementById("modal-opp-id").value = o.id;
+  document.getElementById("modal-odds").value   = o.decimal_odds.toFixed(2);
+  document.getElementById("modal-stake").value  = o.recommended_stake ? o.recommended_stake.toFixed(2) : "";
+  document.getElementById("modal-bookie").value = o.bookmaker;
+  document.getElementById("modal-notes").value  = "";
+  document.getElementById("bet-modal").classList.remove("hidden");
+}
+
+document.getElementById("modal-cancel").onclick = () => document.getElementById("bet-modal").classList.add("hidden");
+document.getElementById("bet-modal").addEventListener("click", e => { if (e.target === e.currentTarget) e.currentTarget.classList.add("hidden"); });
+
+document.getElementById("modal-submit").onclick = async () => {
+  const oppId  = parseInt(document.getElementById("modal-opp-id").value);
+  const odds   = parseFloat(document.getElementById("modal-odds").value);
+  const stake  = parseFloat(document.getElementById("modal-stake").value);
+  const bookie = document.getElementById("modal-bookie").value.trim();
+  const notes  = document.getElementById("modal-notes").value.trim();
+
+  if (!odds || !stake || !bookie) { Toast.error("Fill in all required fields"); return; }
+
+  try {
+    await API.recordBet({ opportunity_id: oppId, odds_taken: odds, stake_amount: stake, bookmaker: bookie, notes });
+    document.getElementById("bet-modal").classList.add("hidden");
+    Toast.success("Bet recorded ✓");
+  } catch(e) { Toast.error(e.message); }
+};
+
+document.getElementById("min-edge").onchange = loadOpps;
+document.getElementById("btn-refresh").onclick = loadOpps;
+
+loadOpps();
+</script>
+</body>
+</html>

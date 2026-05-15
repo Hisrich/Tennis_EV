@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Model Analytics — Tennis EV</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="brand"><span class="icon">⚡</span> Tennis EV</div>
+      <div class="sub">Value Betting Platform</div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html"        class="nav-item"><span class="icon">📊</span> Dashboard</a>
+      <a href="opportunities.html"class="nav-item"><span class="icon">🎯</span> Value Bets</a>
+      <a href="bets.html"         class="nav-item"><span class="icon">📋</span> My Bets</a>
+      <a href="performance.html"  class="nav-item"><span class="icon">📈</span> Performance</a>
+      <a href="backtest.html"     class="nav-item"><span class="icon">🔁</span> Backtester</a>
+      <a href="model.html"        class="nav-item"><span class="icon">🧠</span> Model Analytics</a>
+      <a href="players.html"      class="nav-item"><span class="icon">👤</span> Players</a>
+      <a href="admin.html"        class="nav-item"><span class="icon">⚙️</span> System</a>
+    </nav>
+    <div class="sidebar-footer">Tennis EV Platform v1.0</div>
+  </aside>
+
+  <main class="main">
+    <div class="page">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <div class="page-title">Model Analytics</div>
+          <div class="page-sub">Active model metrics and feature importance</div>
+        </div>
+        <div class="flex gap-2">
+          <select id="algo-select" class="form-control" style="width:140px">
+            <option value="xgboost">XGBoost</option>
+            <option value="lightgbm">LightGBM</option>
+            <option value="logistic">Logistic</option>
+          </select>
+          <button class="btn btn-primary" id="btn-retrain">🔁 Retrain Model</button>
+        </div>
+      </div>
+
+      <!-- Active model stats -->
+      <div id="active-model-card" class="card" style="margin-bottom:20px">
+        <div class="card-title">Active Model</div>
+        <div style="color:var(--muted);font-size:13px">Loading…</div>
+      </div>
+
+      <div class="grid-2">
+        <!-- Feature importance -->
+        <div class="card">
+          <div class="card-title">Feature Importance (Top 15)</div>
+          <canvas id="fi-chart" height="320"></canvas>
+        </div>
+
+        <!-- Model history -->
+        <div class="card">
+          <div class="card-title">Model Version History</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Version</th><th>Algo</th><th>Log Loss</th><th>AUC</th><th>Samples</th><th>Active</th></tr></thead>
+              <tbody id="model-history-tbody"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+function drawBarChart(canvas, labels, values, color = "#22c55e") {
+  const ctx = canvas.getContext("2d");
+  const W = canvas.offsetWidth || canvas.width;
+  const H = canvas.height;
+  canvas.width = W;
+  ctx.clearRect(0, 0, W, H);
+
+  const n = labels.length;
+  if (!n) return;
+
+  const maxV = Math.max(...values) || 1;
+  const pad = { top: 10, right: 16, bottom: 10, left: 150 };
+  const iW = W - pad.left - pad.right;
+  const rowH = (H - pad.top - pad.bottom) / n;
+  const barH = rowH * 0.55;
+
+  labels.forEach((label, i) => {
+    const y = pad.top + i * rowH + (rowH - barH) / 2;
+    const bw = (values[i] / maxV) * iW;
+
+    // Bar
+    ctx.fillStyle = color + "33";
+    ctx.fillRect(pad.left, y, iW, barH);
+    ctx.fillStyle = color;
+    ctx.fillRect(pad.left, y, bw, barH);
+
+    // Label
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = "11px sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(label.length > 20 ? label.slice(0, 20) + "…" : label, pad.left - 6, y + barH / 2 + 4);
+
+    // Value
+    ctx.fillStyle = color;
+    ctx.textAlign = "left";
+    ctx.fillText(values[i].toFixed(3), pad.left + bw + 4, y + barH / 2 + 4);
+  });
+}
+
+async function loadModels() {
+  try {
+    const models = await API.getModels();
+    const active = models.find(m => m.is_active) || models[0];
+
+    if (active) {
+      document.getElementById("active-model-card").innerHTML = `
+        <div class="card-title">Active Model — ${active.version}</div>
+        <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin:0">
+          <div class="stat-card"><div class="stat-label">Algorithm</div><div class="stat-value" style="font-size:16px">${active.algorithm}</div></div>
+          <div class="stat-card"><div class="stat-label">Log Loss</div><div class="stat-value" style="font-size:20px">${active.log_loss?.toFixed(4) ?? "—"}</div></div>
+          <div class="stat-card"><div class="stat-label">AUC-ROC</div><div class="stat-value green" style="font-size:20px">${active.roc_auc?.toFixed(4) ?? "—"}</div></div>
+          <div class="stat-card"><div class="stat-label">Train Samples</div><div class="stat-value" style="font-size:20px">${active.n_train_samples?.toLocaleString() ?? "—"}</div></div>
+        </div>`;
+
+      // Feature importance chart
+      const fi = active.feature_importance || {};
+      const entries = Object.entries(fi).sort((a, b) => b[1] - a[1]).slice(0, 15);
+      if (entries.length) {
+        const canvas = document.getElementById("fi-chart");
+        canvas.style.width = "100%";
+        setTimeout(() => drawBarChart(canvas, entries.map(e => e[0]), entries.map(e => e[1])), 50);
+      }
+    }
+
+    // History table
+    const tbody = document.getElementById("model-history-tbody");
+    if (!models.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">No models trained yet</td></tr>'; return; }
+    tbody.innerHTML = models.map(m => `<tr>
+      <td class="fw-bold">${m.version}</td>
+      <td>${m.algorithm}</td>
+      <td>${m.log_loss?.toFixed(4) ?? "—"}</td>
+      <td class="${m.roc_auc > 0.7 ? "text-green" : ""}">${m.roc_auc?.toFixed(4) ?? "—"}</td>
+      <td class="text-muted">${m.n_train_samples?.toLocaleString() ?? "—"}</td>
+      <td>${m.is_active ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-gray">—</span>'}</td>
+    </tr>`).join("");
+  } catch(e) { console.error(e); }
+}
+
+document.getElementById("btn-retrain").onclick = async () => {
+  const algo = document.getElementById("algo-select").value;
+  const btn = document.getElementById("btn-retrain");
+  btn.disabled = true; btn.textContent = "Queued…";
+  try {
+    await API.triggerTrain(algo);
+    Toast.success("Retrain queued. Results will appear when done.");
+  } catch(e) { Toast.error(e.message); }
+  finally { setTimeout(() => { btn.disabled = false; btn.textContent = "🔁 Retrain Model"; }, 3000); }
+};
+
+loadModels();
+</script>
+</body>
+</html>

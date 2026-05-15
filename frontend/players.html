@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Players — Tennis EV</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="brand"><span class="icon">⚡</span> Tennis EV</div>
+      <div class="sub">Value Betting Platform</div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html"        class="nav-item"><span class="icon">📊</span> Dashboard</a>
+      <a href="opportunities.html"class="nav-item"><span class="icon">🎯</span> Value Bets</a>
+      <a href="bets.html"         class="nav-item"><span class="icon">📋</span> My Bets</a>
+      <a href="performance.html"  class="nav-item"><span class="icon">📈</span> Performance</a>
+      <a href="backtest.html"     class="nav-item"><span class="icon">🔁</span> Backtester</a>
+      <a href="model.html"        class="nav-item"><span class="icon">🧠</span> Model Analytics</a>
+      <a href="players.html"      class="nav-item"><span class="icon">👤</span> Players</a>
+      <a href="admin.html"        class="nav-item"><span class="icon">⚙️</span> System</a>
+    </nav>
+    <div class="sidebar-footer">Tennis EV Platform v1.0</div>
+  </aside>
+
+  <main class="main">
+    <div class="page">
+      <div class="page-title">Players</div>
+      <div class="page-sub">ATP / WTA player profiles and Elo rating history</div>
+
+      <div class="grid-2" style="margin-bottom:20px;align-items:start">
+        <!-- Player list -->
+        <div class="card">
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <input type="text" id="player-search" class="form-control" placeholder="Search players…" style="flex:1" />
+            <button class="btn btn-outline" id="btn-search">Search</button>
+          </div>
+          <div id="player-list"><div class="empty"><div class="spinner"></div></div></div>
+        </div>
+
+        <!-- Elo history chart -->
+        <div class="card">
+          <div class="card-title" id="elo-title">Elo Rating History</div>
+          <div id="elo-surface-tabs" class="tabs" style="margin-bottom:12px">
+            <button class="tab active" data-surface="">Overall</button>
+            <button class="tab" data-surface="hard">Hard</button>
+            <button class="tab" data-surface="clay">Clay</button>
+            <button class="tab" data-surface="grass">Grass</button>
+          </div>
+          <div class="chart-wrap" style="height:240px"><canvas id="elo-chart"></canvas></div>
+          <div id="elo-empty" class="empty" style="margin-top:8px">Select a player to view Elo history</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+let selectedPlayerId = null;
+let selectedSurface = "";
+
+async function loadPlayers(q = "") {
+  const el = document.getElementById("player-list");
+  el.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
+  try {
+    const players = await API.getPlayers(q);
+    if (!players.length) { el.innerHTML = '<div class="empty">No players found</div>'; return; }
+    el.innerHTML = players.map(p => `
+      <div class="player-row" data-id="${p.id}" style="display:flex;align-items:center;justify-content:space-between;padding:10px 8px;border-radius:8px;cursor:pointer;transition:background .1s;margin-bottom:2px" onmouseover="this.style.background='rgba(255,255,255,.05)'" onmouseout="this.style.background=''" onclick="selectPlayer(${p.id}, '${p.name.replace(/'/g,"\\'")}')">
+        <div>
+          <div style="font-weight:600;font-size:13px">${p.name}</div>
+          <div style="font-size:11px;color:var(--muted)">${p.nationality || "—"}</div>
+        </div>
+        <div style="text-align:right">
+          ${p.ranking ? `<span class="badge badge-blue">#${p.ranking}</span>` : ""}
+        </div>
+      </div>`).join("");
+  } catch(e) { el.innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
+}
+
+async function selectPlayer(id, name) {
+  selectedPlayerId = id;
+  document.getElementById("elo-title").textContent = `Elo Rating — ${name}`;
+  document.getElementById("elo-empty").classList.add("hidden");
+
+  // Highlight selected
+  document.querySelectorAll(".player-row").forEach(r => r.style.background = "");
+  const row = document.querySelector(`.player-row[data-id="${id}"]`);
+  if (row) row.style.background = "var(--green-dim)";
+
+  loadElo(id, selectedSurface);
+}
+
+async function loadElo(playerId, surface) {
+  try {
+    const history = await API.getEloHistory(playerId);  // surface param could be added
+    const canvas = document.getElementById("elo-chart");
+    canvas.style.width = "100%"; canvas.style.height = "240px";
+    setTimeout(() => drawLineChart(canvas, history, { xKey: "date", yKey: "rating", color: "#3b82f6" }), 50);
+  } catch(e) { console.error(e); }
+}
+
+document.getElementById("btn-search").onclick = () => loadPlayers(document.getElementById("player-search").value);
+document.getElementById("player-search").addEventListener("keydown", e => { if (e.key === "Enter") loadPlayers(e.target.value); });
+
+document.querySelectorAll("#elo-surface-tabs .tab").forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll("#elo-surface-tabs .tab").forEach(x => x.classList.remove("active"));
+    t.classList.add("active");
+    selectedSurface = t.dataset.surface;
+    if (selectedPlayerId) loadElo(selectedPlayerId, selectedSurface);
+  };
+});
+
+loadPlayers();
+</script>
+</body>
+</html>

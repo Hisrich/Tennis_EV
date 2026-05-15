@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>System — Tennis EV</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="brand"><span class="icon">⚡</span> Tennis EV</div>
+      <div class="sub">Value Betting Platform</div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html"        class="nav-item"><span class="icon">📊</span> Dashboard</a>
+      <a href="opportunities.html"class="nav-item"><span class="icon">🎯</span> Value Bets</a>
+      <a href="bets.html"         class="nav-item"><span class="icon">📋</span> My Bets</a>
+      <a href="performance.html"  class="nav-item"><span class="icon">📈</span> Performance</a>
+      <a href="backtest.html"     class="nav-item"><span class="icon">🔁</span> Backtester</a>
+      <a href="model.html"        class="nav-item"><span class="icon">🧠</span> Model Analytics</a>
+      <a href="players.html"      class="nav-item"><span class="icon">👤</span> Players</a>
+      <a href="admin.html"        class="nav-item"><span class="icon">⚙️</span> System</a>
+    </nav>
+    <div class="sidebar-footer">Tennis EV Platform v1.0</div>
+  </aside>
+
+  <main class="main">
+    <div class="page">
+      <div class="page-title">System</div>
+      <div class="page-sub">Manual task triggers and scheduled job status</div>
+
+      <div class="grid-2">
+        <!-- Manual triggers -->
+        <div class="card">
+          <div class="card-title">Manual Task Triggers</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:14px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)">
+              <div>
+                <div style="font-weight:600;font-size:13px">Collect Odds</div>
+                <div style="font-size:11px;color:var(--muted)">Fetch latest odds from bookmakers</div>
+              </div>
+              <button class="btn btn-outline btn-sm task-btn" data-task="collect-odds">▶ Run</button>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:14px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)">
+              <div>
+                <div style="font-weight:600;font-size:13px">Run Predictions</div>
+                <div style="font-size:11px;color:var(--muted)">Generate ML win probabilities for upcoming matches</div>
+              </div>
+              <button class="btn btn-outline btn-sm task-btn" data-task="run-predictions">▶ Run</button>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:14px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)">
+              <div>
+                <div style="font-weight:600;font-size:13px">Scan for Value</div>
+                <div style="font-size:11px;color:var(--muted)">Detect positive EV betting opportunities</div>
+              </div>
+              <button class="btn btn-outline btn-sm task-btn" data-task="scan-value">▶ Run</button>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:14px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)">
+              <div>
+                <div style="font-weight:600;font-size:13px">Rebuild Elo Ratings</div>
+                <div style="font-size:11px;color:var(--muted)">Recalculate all Elo ratings from match history</div>
+              </div>
+              <button class="btn btn-outline btn-sm task-btn" data-task="rebuild-elo">▶ Run</button>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:14px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)">
+              <div>
+                <div style="font-weight:600;font-size:13px">Retrain Model</div>
+                <div style="font-size:11px;color:var(--muted)">Queue a full model retrain on all historical data</div>
+              </div>
+              <button class="btn btn-primary btn-sm" id="btn-retrain-admin">▶ Retrain</button>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Scheduled jobs info -->
+        <div class="card">
+          <div class="card-title">Celery Beat Schedule</div>
+          <table style="font-size:12px">
+            <thead><tr><th>Task</th><th>Schedule</th></tr></thead>
+            <tbody>
+              <tr><td>Collect Odds</td><td class="text-muted">Every 30 min</td></tr>
+              <tr><td>Run Predictions</td><td class="text-muted">Every 30 min</td></tr>
+              <tr><td>Scan for Value</td><td class="text-muted">Every 30 min</td></tr>
+              <tr><td>Send Alerts</td><td class="text-muted">Every 15 min</td></tr>
+              <tr><td>Update Elo Ratings</td><td class="text-muted">Every 6 hours</td></tr>
+              <tr><td>Daily Summary</td><td class="text-muted">23:00 UTC daily</td></tr>
+              <tr><td>Retrain Model</td><td class="text-muted">Sunday 02:00 UTC</td></tr>
+            </tbody>
+          </table>
+
+          <hr class="divider" />
+
+          <!-- CSV import -->
+          <div class="card-title">Historical Data Import</div>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">
+            Import Jeff Sackmann ATP/WTA CSV files to seed historical match data for model training.
+          </p>
+          <div class="form-row">
+            <div class="form-group" style="flex:1">
+              <label>Select File (.csv, .xlsx or .xls)</label>
+              <input type="file" id="csv-file" accept=".csv,.xlsx,.xls" class="form-control" />
+            </div>
+          </div>
+          <button class="btn btn-outline" id="btn-ingest">Import CSV</button>
+          <div id="ingest-status" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
+        </div>
+      </div>
+
+      <!-- Health check -->
+      <div class="card" style="margin-top:20px">
+        <div class="card-title">API Health</div>
+        <div id="health-status" style="font-size:13px;color:var(--muted)">Checking…</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+// Task buttons
+document.querySelectorAll(".task-btn").forEach(btn => {
+  btn.onclick = async () => {
+    const task = btn.dataset.task;
+    btn.disabled = true; btn.textContent = "Queued…";
+    try {
+      await API.triggerTask(task);
+      Toast.success(`${task} queued`);
+    } catch(e) { Toast.error(e.message); }
+    finally { setTimeout(() => { btn.disabled = false; btn.textContent = "▶ Run"; }, 3000); }
+  };
+});
+
+document.getElementById("btn-retrain-admin").onclick = async () => {
+  const btn = document.getElementById("btn-retrain-admin");
+  btn.disabled = true; btn.textContent = "Queued…";
+  try {
+    await API.triggerTrain("xgboost");
+    Toast.success("Model retrain queued");
+  } catch(e) { Toast.error(e.message); }
+  finally { setTimeout(() => { btn.disabled = false; btn.textContent = "▶ Retrain"; }, 3000); }
+};
+
+document.getElementById("btn-ingest").onclick = async () => {
+  const fileInput = document.getElementById("csv-file");
+  if (!fileInput.files.length) { Toast.error("Choose a file first"); return; }
+  const status = document.getElementById("ingest-status");
+  status.textContent = "Uploading…";
+  const formData = new FormData();
+  formData.append("file", fileInput.files[0]);
+  try {
+    const res = await fetch("/api/admin/upload-file", { method: "POST", body: formData });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    status.textContent = `✓ Imported ${data.records_ingested} records`;
+    Toast.success(`Imported ${data.records_ingested} records`);
+  } catch(e) {
+    status.textContent = `Error: ${e.message}`;
+    Toast.error(e.message);
+  }
+};
+
+// Health check
+async function checkHealth() {
+  const el = document.getElementById("health-status");
+  try {
+    const res = await API.get("/health");
+    el.innerHTML = `<span class="text-green">● Online</span> — ${res.timestamp}`;
+  } catch(e) {
+    el.innerHTML = `<span class="text-red">● Offline</span> — Cannot reach backend`;
+  }
+}
+checkHealth();
+</script>
+</body>
+</html>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — Tennis EV</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="brand"><span class="icon">⚡</span> Tennis EV</div>
+      <div class="sub">Value Betting Platform</div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html"        class="nav-item"><span class="icon">📊</span> Dashboard</a>
+      <a href="opportunities.html"class="nav-item"><span class="icon">🎯</span> Value Bets</a>
+      <a href="bets.html"         class="nav-item"><span class="icon">📋</span> My Bets</a>
+      <a href="performance.html"  class="nav-item"><span class="icon">📈</span> Performance</a>
+      <a href="backtest.html"     class="nav-item"><span class="icon">🔁</span> Backtester</a>
+      <a href="model.html"        class="nav-item"><span class="icon">🧠</span> Model Analytics</a>
+      <a href="players.html"      class="nav-item"><span class="icon">👤</span> Players</a>
+      <a href="admin.html"        class="nav-item"><span class="icon">⚙️</span> System</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div>Tennis EV Platform v1.0</div>
+      <div style="margin-top:2px">Quantitative Betting System</div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="page">
+      <div class="page-title">Dashboard</div>
+      <div class="page-sub">Live overview of value bets and performance</div>
+
+      <!-- Stat cards -->
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card"><div class="stat-label">Upcoming Matches</div><div class="stat-value" id="stat-matches">—</div></div>
+        <div class="stat-card"><div class="stat-label">Active Value Bets</div><div class="stat-value green" id="stat-opps">—</div></div>
+        <div class="stat-card"><div class="stat-label">ROI (30d)</div><div class="stat-value" id="stat-roi">—</div></div>
+        <div class="stat-card"><div class="stat-label">Total Bets</div><div class="stat-value" id="stat-bets">—</div></div>
+        <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value" id="stat-wr">—</div></div>
+        <div class="stat-card"><div class="stat-label">Active Model</div><div class="stat-value" id="stat-model" style="font-size:14px">—</div></div>
+      </div>
+
+      <!-- Bankroll chart + top bets -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Bankroll History (90d)</div>
+          <div class="chart-wrap"><canvas id="bankroll-chart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+            Top Value Bets
+            <a href="opportunities.html" style="font-size:11px;color:var(--green)">View all →</a>
+          </div>
+          <div id="top-bets"><div class="empty"><div class="spinner"></div></div></div>
+        </div>
+      </div>
+
+      <!-- Recent bets table -->
+      <div class="card">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+          Recent Bets
+          <a href="bets.html" style="font-size:11px;color:var(--green)">View all →</a>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Match</th><th>Bookmaker</th><th>Odds</th><th>Stake</th><th>Status</th><th>P&amp;L</th>
+            </tr></thead>
+            <tbody id="recent-bets-tbody"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+async function loadDashboard() {
+  // Load overview stats
+  try {
+    const ov = await API.getOverview();
+    document.getElementById("stat-matches").textContent = ov.upcoming_matches ?? "—";
+    document.getElementById("stat-opps").textContent    = ov.active_opportunities ?? "—";
+    document.getElementById("stat-model").textContent   = ov.active_model ?? "None";
+  } catch(e) { console.error(e); }
+
+  // Performance summary
+  try {
+    const perf = await API.getPerformanceSummary(30);
+    const roi = perf.roi_percent;
+    const roiEl = document.getElementById("stat-roi");
+    roiEl.textContent = (roi >= 0 ? "+" : "") + roi.toFixed(1) + "%";
+    roiEl.classList.add(roi >= 0 ? "green" : "red");
+    document.getElementById("stat-bets").textContent = perf.total_bets;
+    const wr = perf.win_rate * 100;
+    document.getElementById("stat-wr").textContent = wr.toFixed(1) + "%";
+  } catch(e) { console.error(e); }
+
+  // Bankroll chart
+  try {
+    const history = await API.getBankrollHistory(90);
+    const canvas = document.getElementById("bankroll-chart");
+    canvas.style.width = "100%"; canvas.style.height = "220px";
+    setTimeout(() => drawLineChart(canvas, history, { xKey: "date", yKey: "bankroll" }), 50);
+  } catch(e) { console.error(e); }
+
+  // Top value bets
+  try {
+    const opps = await API.getOpportunities(5);
+    const el = document.getElementById("top-bets");
+    if (!opps.length) { el.innerHTML = '<div class="empty">No active value bets</div>'; return; }
+    el.innerHTML = opps.slice(0, 6).map(o => {
+      const p1 = o.match?.player1?.name || "P1";
+      const p2 = o.match?.player2?.name || "P2";
+      const betOn = o.bet_on_player === 1 ? p1 : p2;
+      const vs    = o.bet_on_player === 1 ? p2 : p1;
+      const edgeColor = o.edge_percent >= 10 ? "badge-green" : o.edge_percent >= 7 ? "badge-yellow" : "badge-blue";
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-weight:600;font-size:13px">${betOn} <span class="badge ${edgeColor}">+${o.edge_percent.toFixed(1)}%</span></div>
+            <div style="font-size:11px;color:var(--muted)">vs ${vs} · ${o.bookmaker}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:18px;font-weight:800">${o.decimal_odds.toFixed(2)}</div>
+            <div style="font-size:11px;color:var(--muted)">${(o.model_probability*100).toFixed(0)}% model</div>
+          </div>
+        </div>`;
+    }).join("");
+  } catch(e) { console.error(e); }
+
+  // Recent bets
+  try {
+    const bets = await API.getBets();
+    const tbody = document.getElementById("recent-bets-tbody");
+    if (!bets.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">No bets recorded yet</td></tr>'; return; }
+    tbody.innerHTML = bets.slice(0, 8).map(b => {
+      const statusClass = b.status === "won" ? "badge-green" : b.status === "lost" ? "badge-red" : "badge-gray";
+      const pl = b.profit_loss;
+      const plStr = pl != null ? (pl >= 0 ? "+" : "") + pl.toFixed(2) : "—";
+      const plClass = pl > 0 ? "text-green" : pl < 0 ? "text-red" : "";
+      return `<tr>
+        <td>${b.bookmaker}</td>
+        <td>${b.bookmaker}</td>
+        <td>${b.odds_taken.toFixed(2)}</td>
+        <td>${b.stake_amount.toFixed(2)}</td>
+        <td><span class="badge ${statusClass}">${b.status || "pending"}</span></td>
+        <td class="${plClass} fw-bold">${plStr}</td>
+      </tr>`;
+    }).join("");
+  } catch(e) { console.error(e); }
+}
+
+loadDashboard();
+</script>
+</body>
+</html>

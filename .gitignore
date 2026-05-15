@@ -1,0 +1,5 @@
+tevenv/
+__pycache__/
+tennis_ev.db
+.env
+seed.py
