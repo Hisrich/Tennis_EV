@@ -120,19 +120,30 @@ class DataIngestionService:
         self.odds_client = OddsAPIClient()
 
     def ingest_odds(self) -> int:
-        """Fetch odds for all tennis markets and store them. Returns count of new records."""
-        count = 0
-        for sport in OddsAPIClient.SPORTS:
+    # Dynamically fetch all active tennis markets
+        try:
+            response = self.client.get(
+                f"{self.base_url}/sports",
+                params={"apiKey": self.api_key}
+            )
+            response.raise_for_status()
+            all_sports = response.json()
+            sports = [s["key"] for s in all_sports if s.get("group") == "Tennis" and not s.get("has_outrights")]
+            logger.info(f"Found {len(sports)} active tennis markets: {sports}")
+        except Exception as e:
+            logger.error(f"Failed to fetch sports list: {e!r}")
+            sports = []
+
+        total = 0
+        for sport in sports:
             try:
-                raw = self.odds_client.get_odds(sport)
-                for event in raw:
-                    saved = self._process_event(event)
-                    count += saved
+                records = self._fetch_and_store_odds(sport)
+                total += records
             except Exception as e:
                 logger.error(f"Error fetching odds for {sport}: {e!r}")
 
-        logger.info(f"Ingested {count} new odds records")
-        return count
+        logger.info(f"Ingested {total} new odds records")
+        return total
 
     def _process_event(self, event: Dict) -> int:
         """Process a single event from the odds API. Returns number of records saved."""
