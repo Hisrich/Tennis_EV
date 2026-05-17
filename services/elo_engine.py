@@ -213,7 +213,7 @@ class EloEngine:
         matches = (
             self.db.query(Match)
             .filter(Match.is_completed == True, Match.winner_id.isnot(None))
-            .order_by(Match.completed_at.asc())
+            .order_by(Match.scheduled_at.asc())
             .all()
         )
 

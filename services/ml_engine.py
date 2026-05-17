@@ -46,7 +46,6 @@ FEATURE_COLUMNS = [
     "p1_right_handed", "p2_right_handed",
     "surface_hard", "surface_clay", "surface_grass", "surface_carpet",
     "is_grand_slam", "is_masters", "draw_size", "round_num",
-    "market_prob_p1", "odds_movement_p1", "bookmaker_count", "has_market_data",
 ]
 
 

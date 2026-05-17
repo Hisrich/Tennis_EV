@@ -3,3 +3,4 @@ __pycache__/
 tennis_ev.db
 .env
 seed.py
+register_model.py

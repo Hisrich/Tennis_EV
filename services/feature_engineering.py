@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
+from loguru import logger
 
 from models.db_models import Match, Player, EloRating, MatchOdds, PlayerStats
 from services.elo_engine import EloEngine
@@ -143,6 +144,21 @@ class FeatureEngineer:
         market = self._get_market_features(match.id, ref_dt)
         features.update(market)
 
+        # ── 10. Data quality check ───────────────────────────────────
+        # If both players have default Elo and unknown rankings,
+        # the prediction will be meaningless — skip it.
+        elo_p1 = features.get("elo_p1", 1500.0)
+        elo_p2 = features.get("elo_p2", 1500.0)
+        rank_p1 = features.get("rank_p1", 999)
+        rank_p2 = features.get("rank_p2", 999)
+
+        if elo_p1 == 1500.0 and elo_p2 == 1500.0 and rank_p1 == 999 and rank_p2 == 999:
+            logger.warning(
+                f"Match {match.id} ({p1.name} vs {p2.name}): "
+                f"both players have no Elo history and unknown rankings, skipping"
+            )
+            return None
+
         return features
 
     def build_dataset(self, matches: List[Match]) -> pd.DataFrame:
@@ -154,6 +170,13 @@ class FeatureEngineer:
             feats = self.build_features(match, reference_date=match.scheduled_at)
             if feats is None:
                 continue
+            # Remove market features from training to prevent circular reasoning:
+            # the model would learn to agree with the market, then find "value"
+            # by comparing its own market-influenced prediction back to the market.
+            feats.pop("market_prob_p1", None)
+            feats.pop("odds_movement_p1", None)
+            feats.pop("bookmaker_count", None)
+            feats.pop("has_market_data", None)
             feats["target"] = 1 if match.winner_id == match.player1_id else 0
             feats["match_id"] = match.id
             feats["match_date"] = match.scheduled_at
@@ -171,7 +194,7 @@ class FeatureEngineer:
             .filter(
                 EloRating.player_id == player_id,
                 EloRating.surface == surface,
-                EloRating.date <= ref_date,
+                EloRating.date < ref_date,
             )
             .order_by(EloRating.date.desc())
             .first()
@@ -187,7 +210,7 @@ class FeatureEngineer:
     def _win_rate(
         self, player_id: int, ref_date, window: int, surface: Optional[str] = None
     ) -> float:
-        cutoff = ref_date - timedelta(days=365)  # Don't go too far back
+        cutoff = ref_date - timedelta(days=730)  # Don't go too far back
         q = (
             self.db.query(Match)
             .filter(
