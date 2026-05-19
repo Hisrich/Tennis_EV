@@ -105,11 +105,14 @@ class TelegramAlertBot:
             return True
 
         try:
-            asyncio.run(bot.send_message(
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(bot.send_message(
                 chat_id=self.chat_id,
                 text=text,
                 parse_mode="Markdown",
             ))
+            loop.close()
             return True
         except Exception as e:
             logger.error(f"Telegram send error: {e}")

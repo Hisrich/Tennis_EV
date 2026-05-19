@@ -528,13 +528,23 @@ def start_scheduler():
             from services.ml_engine import MLEngine
             try:
                 eng = MLEngine(db)
+                model = eng._load_active_model()
+                if model is None:
+                    logger.error("run_predictions: no active model, skipping")
+                    return
                 upcoming = db.query(Match).filter(
-                    Match.is_completed == False, Match.scheduled_at > datetime.utcnow()
+                    Match.is_completed == False,
+                    Match.scheduled_at > datetime.utcnow()
                 ).all()
+                logger.info(f"run_predictions: found {len(upcoming)} upcoming matches")
+                saved = 0
                 for match in upcoming:
-                    eng.predict_and_save(match)
+                    result = eng.predict_and_save(match)
+                    if result:
+                        saved += 1
+                logger.info(f"run_predictions: saved {saved}/{len(upcoming)} predictions")
             except Exception as e:
-                logger.error(f"Scheduled run_predictions error: {e}")
+                logger.error(f"Scheduled run_predictions error: {e}", exc_info=True)
 
     def job_scan_value():
         with db_session() as db:

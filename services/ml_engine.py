@@ -221,14 +221,24 @@ class MLEngine:
             .filter(ModelRegistry.is_active == True)
             .first()
         )
-        if not registry or not registry.file_path:
+        if not registry:
+            logger.warning("No active model in registry")
             return None
 
-        if os.path.exists(registry.file_path):
+        if registry.model_binary:
+            import io
+            buffer = io.BytesIO(registry.model_binary)
+            self._active_model = joblib.load(buffer)
+            self._active_version = registry.version
+            logger.info(f"Loaded model {registry.version} from database")
+            return self._active_model
+
+        if registry.file_path and os.path.exists(registry.file_path):
             self._active_model = joblib.load(registry.file_path)
             self._active_version = registry.version
             return self._active_model
 
+        logger.warning(f"Model {registry.version} not found in DB or on disk")
         return None
 
     def _prepare_X(self, df: pd.DataFrame) -> np.ndarray:
